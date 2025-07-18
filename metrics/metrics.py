@@ -158,7 +158,5 @@ def MSE_MAE(distances):
     return mse, mae
 
 
-def variabilité(distances):
-    return np.mean((distances - np.mean(distances)) ** 2), np.mean(
-        np.abs(distances - np.mean(distances))
-    )
+def variability(distances):
+    return np.mean((distances - np.mean(distances)) ** 2)
