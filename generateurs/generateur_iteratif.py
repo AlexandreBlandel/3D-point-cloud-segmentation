@@ -2,13 +2,13 @@ import trimesh
 import numpy as np
 import os
 from scipy.spatial import KDTree
-from utils import trim_to_pointcloud
-from utils_gen import deformation_tot
-from utils_gen import save_labeled_point_cloud
-from utils_gen import dropout_pointcloud
-from utils_gen import generate_sphere_points
-from utils_gen import enlever_pot
-from outlier import generate_outliers_batch_v3
+from ..utils import trim_to_pointcloud
+from .utils_gen import deformation_tot
+from .utils_gen import save_labeled_point_cloud
+from .utils_gen import dropout_pointcloud
+from .utils_gen import generate_sphere_points
+from .utils_gen import enlever_pot
+from .outlier import generate_outliers_batch_v3
 
 
 def iterative_growth(

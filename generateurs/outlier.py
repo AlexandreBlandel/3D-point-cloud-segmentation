@@ -1,5 +1,4 @@
 import numpy as np
-from utils import enlever_pot
 
 
 def generate_outliers_batch_v2(

@@ -2,13 +2,13 @@ import numpy as np
 import random as rd
 import trimesh
 import os
-from utils import trim_to_pointcloud
-from utils_gen import deformation_tot
-from utils_gen import save_labeled_point_cloud
-from utils_gen import dropout_pointcloud
-from utils_gen import generate_sphere_points
-from outlier import generate_outliers_batch_v3
-from utils_gen import enlever_pot
+from ..utils import trim_to_pointcloud
+from .utils_gen import deformation_tot
+from .utils_gen import save_labeled_point_cloud
+from .utils_gen import dropout_pointcloud
+from .utils_gen import generate_sphere_points
+from .outlier import generate_outliers_batch_v3
+from .utils_gen import enlever_pot
 
 # Définition de paramètres:
 max_rad_sphere = 0.025
@@ -16,7 +16,7 @@ min_dens = 1000000
 max_dens = 10000000
 
 
-def rd_add_single_sphere(point_cloud_corolla, radius, density):
+def rd_add_single_sphere(point_cloud_corolla, radius: float, density):
     """
     Ajoute une sphère de points à un endroit au hasard
     Entrées:
