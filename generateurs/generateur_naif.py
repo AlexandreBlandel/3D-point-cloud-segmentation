@@ -2,13 +2,13 @@ import numpy as np
 import random as rd
 import trimesh
 import os
-from ..utils import trim_to_pointcloud
-from .utils_gen import deformation_tot
-from .utils_gen import save_labeled_point_cloud
-from .utils_gen import dropout_pointcloud
-from .utils_gen import generate_sphere_points
-from .outlier import generate_outliers_batch_v3
-from .utils_gen import enlever_pot
+from utils import trim_to_pointcloud
+from generateurs.utils_gen import deformation_tot
+from generateurs.utils_gen import save_labeled_point_cloud
+from generateurs.utils_gen import dropout_pointcloud
+from generateurs.utils_gen import generate_sphere_points
+from generateurs.outlier import generate_outliers_batch_v3
+from generateurs.utils_gen import enlever_pot
 
 # Définition de paramètres:
 max_rad_sphere = 0.025
@@ -64,7 +64,7 @@ def gen_dataset_naif(
     n,
     with_outliers=False,
     corolla_link="Corolle_L_pour_Canoscan_NonRenf_Filins_MESH.obj",
-    save_dir="dataset_naif",
+    save_dir="data/synthetiques/dataset_naif",
     max_rad=max_rad_sphere,
     min_dens=min_dens,
     max_dens=max_dens,

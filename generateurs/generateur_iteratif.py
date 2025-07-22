@@ -2,13 +2,13 @@ import trimesh
 import numpy as np
 import os
 from scipy.spatial import KDTree
-from ..utils import trim_to_pointcloud
-from .utils_gen import deformation_tot
-from .utils_gen import save_labeled_point_cloud
-from .utils_gen import dropout_pointcloud
-from .utils_gen import generate_sphere_points
-from .utils_gen import enlever_pot
-from .outlier import generate_outliers_batch_v3
+from utils import trim_to_pointcloud
+from generateurs.utils_gen import deformation_tot
+from generateurs.utils_gen import save_labeled_point_cloud
+from generateurs.utils_gen import dropout_pointcloud
+from generateurs.utils_gen import generate_sphere_points
+from generateurs.utils_gen import enlever_pot
+from generateurs.outlier import generate_outliers_batch_v3
 
 
 def iterative_growth(
@@ -89,7 +89,7 @@ def gen_dataset(
     n,
     scene_link="Corolle_L_pour_Canoscan_NonRenf_Filins_MESH.obj",
     with_outliers=False,
-    save_dir="generateurs/dataset_iter_outlier_dropout",
+    save_dir="data/synthetiques/dataset_iter_outlier_dropout",
 ):
 
     # Étape 1 : Chargement du mesh et extraction du nuage

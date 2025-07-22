@@ -1,0 +1,22 @@
+IMPLEMENTATION/
+├── __init__.py           
+├── main.py              
+├── utils.py              
+├── compare/            
+│   ├── __init__.py
+│   ├── test.py
+│   └── visualisation.py
+├── data/
+│   ├── reel/
+│   └── synthetiques/
+├── generateurs/
+│   ├── __init__.py
+│   ├── generateur_iteratif.py
+│   ├── generateur_naif.py
+│   ├── utils_gen.py
+│   └── outlier.py
+├── metrics/
+│   ├── __init__.py
+│   ├── metrics.py
+│   ├── indicators.py
+│   └── histograms.py
