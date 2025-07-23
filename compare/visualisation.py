@@ -41,6 +41,7 @@ def visualiser_sample_open3d_robuste(source, return_pc=True):
         - Chemin vers un fichier `.npy` contenant {'points': (N, 3), 'labels': (N,)}
         - Chemin vers un fichier `.ply`
         - Ou dictionnaire {'points': (N, 3), 'labels': (N,)} déjà chargé
+        - ou nuage de point o3d
 
     Couleurs utilisées :
         - label=0 : gris (corolle)
