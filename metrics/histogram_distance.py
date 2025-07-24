@@ -5,6 +5,17 @@ class HistogramDistance:
     def __init__(self, epsilon=1e-10):
         self.epsilon = epsilon
 
+    @staticmethod
+    def normalize_hist(hist):
+        """
+        Normalise un histogramme pour que la somme des fréquences soit 1.
+        """
+        hist = hist.astype(np.float64)
+        total = np.sum(hist)
+        if total > 0:
+            return hist / total
+        return hist
+
     def l1(self, h1, h2):
         """Distance de Manhattan (L1)"""
         return np.sum(np.abs(h1 - h2))
