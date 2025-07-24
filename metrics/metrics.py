@@ -8,50 +8,43 @@ from scipy.optimize import linprog
 import os
 import trimesh
 from utils import trim_to_pointcloud
+from point_cloud import PointCloud
 
 
 class Distance:
     def __init__(self, normalize=True):
         self.normalize = normalize
 
-    def _normalize(self, pc):
+    def _normalize(self, pc: PointCloud):
         """
         Ramène le nuage dans le cube [0, 1]^3
         """
-        # Étape 1 : Centrage autour du barycentre
-        centroid = np.mean(pc, axis=0)
-        points_centered = pc - centroid
+        pc.normalize()
 
-        # Étape 2 : Mise à l’échelle (normalisation par la plus grande norme)
-        max_dist = np.max(np.linalg.norm(points_centered, axis=1))
-        points_normalized = points_centered / max_dist
-
-        # Étape 3 : Mise à l’échelle dans le cube [0, 1]^3
-        point_cloud = (points_normalized + 1) / 2
-
-        return point_cloud
-
-    def _prepare(self, pc_1, pc_2):
+    def _prepare(self, pc_1: PointCloud, pc_2: PointCloud):
         """
         Applique la normalisation si nécessaire
         """
         if self.normalize:
-            pc_1 = self._normalize(pc_1)
-            pc_2 = self._normalize(pc_2)
-        return pc_1, pc_2
+            self._normalize(pc_1)
+            self._normalize(pc_2)
 
-    def earth_mover(self, pc_1, pc_2):
+    def compute_cost_matrix(self, pc_1: PointCloud, pc_2: PointCloud, flatten=False):
+        # Matrice de coût
+        C = cdist(np.asarray(pc_1.points), np.asarray(pc_2.points), metric="euclidean")
+        return C.flatten() if flatten else C
+
+    def earth_mover(self, pc_1: PointCloud, pc_2: PointCloud):
         """
         Fonction pour calculer la distance de Earth Mover entre deux nuages de points.
         """
-        pc_1, pc_2 = self._prepare(pc_1, pc_2)
+        self._prepare(pc_1, pc_2)
         # Poids uniformes
-        n, m = len(pc_1), len(pc_2)
+        n, m = pc_1.size, pc_2.size
         u = np.full(n, 1.0 / n)
         v = np.full(m, 1.0 / m)
         # Matrice de coût
-        C = cdist(pc_1, pc_2, metric="euclidean")
-        cost = C.flatten()
+        C = self.compute_cost_matrix(pc_1, pc_2, flatten=True)
         # Contraintes d'égalités:
         # - pour chaque i: sum_j T_{ij} = u_i → total n contraintes
         # - pour chaque j: sum_i T_{ij} = v_j → total m contraintes
@@ -76,9 +69,7 @@ class Distance:
 
         bounds = [(0, None) for _ in range(n * m)]
 
-        result = linprog(
-            c=cost, A_eq=pc_1_eq, b_eq=pc_2_eq, bounds=bounds, method="highs"
-        )
+        result = linprog(c=C, A_eq=pc_1_eq, b_eq=pc_2_eq, bounds=bounds, method="highs")
 
         if result.success:
             emd = result.fun
@@ -86,14 +77,21 @@ class Distance:
         else:
             raise ValueError("Linear program failed:", result.message)
 
-    def sinkhorn(self, pc_1, pc_2, lambda_reg=10.0, max_iter=1000, tol=1e-5):
+    def sinkhorn(
+        self,
+        pc_1: PointCloud,
+        pc_2: PointCloud,
+        lambda_reg=10.0,
+        max_iter=1000,
+        tol=1e-5,
+    ):
         """
         Distance de Sinkhorn (comme Earth Mover avec un terme de régularisation entropique)
         """
-        pc_1, pc_2 = self._prepare(pc_1, pc_2)
-        n, m = len(pc_1), len(pc_2)
+        self._prepare(pc_1, pc_2)
+        n, m = pc_1.size, pc_2.size
         # Matrice des coûts : distances euclidiennes
-        C = cdist(pc_1, pc_2, metric="euclidean")  # shape (n, m)
+        C = self.compute_cost_matrix(pc_1, pc_2)
 
         # Matrice K = exp(-lambda * M)
         K = np.exp(-lambda_reg * C)
@@ -122,14 +120,13 @@ class Distance:
         return sinkhorn_distance
         # TODO regarder Python Optimal Transport et travailler en log-domain pour une version plus stable
 
-    def schamfer(self, pc_1, pc_2):
+    def schamfer(self, pc_1: PointCloud, pc_2: PointCloud):
         """
         Distance de Schamfer
         """
-        pc_1, pc_2 = np.asarray(pc_1), np.asarray(pc_2)
-        pc_1, pc_2 = self._prepare(pc_1, pc_2)
-        C = cdist(pc_1, pc_2, metric="euclidean")  # shape (n, m)
-        n, m = len(pc_1), len(pc_2)
+        self._prepare(pc_1, pc_2)
+        C = self.compute_cost_matrix(pc_1, pc_2)
+        n, m = pc_1.size, pc_2.size
         C12 = np.sum(np.min(C, axis=1)) / n
         C21 = np.sum(np.min(C, axis=0)) / m
         return C12 + C21
