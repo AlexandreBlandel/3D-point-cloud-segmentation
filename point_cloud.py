@@ -45,18 +45,19 @@ class PointCloud(ABC):
         if return_pc:
             return pcd
 
-    def normalize(self):
+    @staticmethod
+    def normalize_points(points: np.ndarray) -> np.ndarray:
 
         # Étape 1 : Centrage autour du barycentre
-        centroid = np.mean(self.points, axis=0)
-        points_centered = self.points - centroid
+        centroid = np.mean(points, axis=0)
+        points_centered = points - centroid
 
         # Étape 2 : Mise à l’échelle (normalisation par la plus grande norme)
         max_dist = np.max(np.linalg.norm(points_centered, axis=1))
         points_normalized = points_centered / max_dist
 
         # Étape 3 : Mise à l’échelle dans le cube [0, 1]^3
-        self.points = (points_normalized + 1) / 2
+        return (points_normalized + 1) / 2
 
     def downsample(self, ratio=0.05, max_points=25_000):
         points = np.asarray(self.points)
@@ -67,7 +68,10 @@ class PointCloud(ABC):
         self.points = points[idx]
         self.colors = colors[idx]
 
-    def rotate_points(self, axis="x", degrees=-90, center=(0, 0, 0)) -> np.ndarray:
+    @staticmethod
+    def rotate_points(
+        points: np.ndarray, axis="x", degrees=-90, center=(0, 0, 0)
+    ) -> np.ndarray:
         """
         Applique une rotation à un nuage de points représenté par un tableau NumPy.
 
@@ -110,7 +114,15 @@ class PointCloud(ABC):
         else:
             raise ValueError("Axe invalide. Choisir parmi 'x', 'y' ou 'z'.")
 
-        self.points = (self.points - center) @ R.T + center
+        return (points - center) @ R.T + center
+
+    def normalize(self):
+        self.points = self.normalize_points(self.points)
+
+    def rotate(self, axis="x", degrees=-90, center=(0, 0, 0)):
+        self.points = self.rotate_points(
+            self.points, axis=axis, degrees=degrees, center=center
+        )
 
 
 """  Pour la classe generators:      
