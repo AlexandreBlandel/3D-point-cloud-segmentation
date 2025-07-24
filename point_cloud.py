@@ -15,10 +15,26 @@ class PointCloud(ABC):
     def load(self, source):
         pass
 
+    @staticmethod
+    def infer_labels_from_colors(colors, tol=1e-2):
+        labels = np.full(colors.shape[0], -1, dtype=int)
+        mask_gray = np.all(np.abs(colors - [0.6, 0.6, 0.6]) < tol, axis=1)
+        mask_green = np.all(np.abs(colors - [0.0, 0.8, 0.0]) < tol, axis=1)
+        mask_red = np.all(np.abs(colors - [1.0, 0.0, 0.0]) < tol, axis=1)
+        labels[mask_gray] = 0
+        labels[mask_green] = 1
+        labels[mask_red] = 2
+        return labels
+
     @abstractmethod
     def get_labels(self):
-        """return les labels associés aux points et ValueError si c'est un nuage de points réels (sans labels)"""
         pass
+
+    @property
+    def size(self):
+        if len(self.points) != len(self.colors):
+            raise ValueError("les points et les couleurs ne sont pas de même taille")
+        return len(self.points)
 
     def visualiser(self, return_pc=True):
         # Créer un nuage de points Open3D
@@ -29,7 +45,7 @@ class PointCloud(ABC):
         if return_pc:
             return pcd
 
-    def normalisation(self):
+    def normalize(self):
 
         # Étape 1 : Centrage autour du barycentre
         centroid = np.mean(self.points, axis=0)
@@ -40,12 +56,7 @@ class PointCloud(ABC):
         points_normalized = points_centered / max_dist
 
         # Étape 3 : Mise à l’échelle dans le cube [0, 1]^3
-        point_cloud = (points_normalized + 1) / 2
-
-        # Étape 4 : Renormalisation dans [0, 1]^3
-        min_vals = np.min(point_cloud, axis=0)
-        max_vals = np.max(point_cloud, axis=0)
-        self.points = (point_cloud - min_vals) / (max_vals - min_vals)
+        self.points = (points_normalized + 1) / 2
 
     def downsample(self, ratio=0.05, max_points=25_000):
         points = np.asarray(self.points)
@@ -131,7 +142,7 @@ class plypcd(PointCloud):
         if pcd.has_colors():
             colors = np.asarray(pcd.colors)
         else:
-            colors = np.full_like(self.points, fill_value=[0.2, 0.5, 1.0])
+            colors = np.full_like(points, fill_value=[0.2, 0.5, 1.0])
         return points, colors
 
     def get_labels(self):
@@ -154,22 +165,10 @@ class npypcd(PointCloud):
         colors[labels == 1] = [0.0, 0.8, 0.0]  # vert pour plante
         colors[labels == 2] = [1.0, 0.0, 0.0]  # rouge pour outliers
 
-        return points, colors
+        return np.asarray(points), np.asarray(colors)
 
-    def get_labels(self, tol=1e-2):
-        labels = np.full(
-            self.colors.shape[0], -1, dtype=int
-        )  # -1 pour les couleurs inconnues
-
-        mask_gray = np.all(np.abs(self.colors - [0.6, 0.6, 0.6]) < tol, axis=1)
-        mask_green = np.all(np.abs(self.colors - [0.0, 0.8, 0.0]) < tol, axis=1)
-        mask_red = np.all(np.abs(self.colors - [1.0, 0.0, 0.0]) < tol, axis=1)
-
-        labels[mask_gray] = 0
-        labels[mask_green] = 1
-        labels[mask_red] = 2
-
-        return labels
+    def get_labels(self):
+        return self.infer_labels_from_colors(self.colors)
 
 
 class dictpcd(PointCloud):
@@ -185,22 +184,10 @@ class dictpcd(PointCloud):
         colors[labels == 1] = [0.0, 0.8, 0.0]  # vert pour plante
         colors[labels == 2] = [1.0, 0.0, 0.0]  # rouge pour outliers
 
-        return points, colors
+        return np.asarray(points), np.asarray(colors)
 
-    def get_labels(self, tol=1e-2):
-        labels = np.full(
-            self.colors.shape[0], -1, dtype=int
-        )  # -1 pour les couleurs inconnues
-
-        mask_gray = np.all(np.abs(self.colors - [0.6, 0.6, 0.6]) < tol, axis=1)
-        mask_green = np.all(np.abs(self.colors - [0.0, 0.8, 0.0]) < tol, axis=1)
-        mask_red = np.all(np.abs(self.colors - [1.0, 0.0, 0.0]) < tol, axis=1)
-
-        labels[mask_gray] = 0
-        labels[mask_green] = 1
-        labels[mask_red] = 2
-
-        return labels
+    def get_labels(self):
+        return self.infer_labels_from_colors(self.colors)
 
 
 class o3dpcd(PointCloud):
@@ -208,21 +195,9 @@ class o3dpcd(PointCloud):
         super().__init__(source)
 
     def load(self, source):
-        points = source.points
-        colors = source.colors
+        points = np.asarray(source.points)
+        colors = np.asarray(source.colors)
         return points, colors
 
-    def get_labels(self, tol=1e-2):
-        labels = np.full(
-            self.colors.shape[0], -1, dtype=int
-        )  # -1 pour les couleurs inconnues
-
-        mask_gray = np.all(np.abs(self.colors - [0.6, 0.6, 0.6]) < tol, axis=1)
-        mask_green = np.all(np.abs(self.colors - [0.0, 0.8, 0.0]) < tol, axis=1)
-        mask_red = np.all(np.abs(self.colors - [1.0, 0.0, 0.0]) < tol, axis=1)
-
-        labels[mask_gray] = 0
-        labels[mask_green] = 1
-        labels[mask_red] = 2
-
-        return labels
+    def get_labels(self):
+        return self.infer_labels_from_colors(self.colors)
