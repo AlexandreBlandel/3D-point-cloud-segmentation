@@ -5,7 +5,8 @@ import pyransame
 import open3d as o3d
 import matplotlib.pyplot as plt
 from abc import ABC, abstractmethod
-
+from metrics.indicators import Indicator
+from metrics.histogram_distance import HistogramDistance
 
 class PointCloud(ABC):
     def __init__(self, source):
@@ -122,6 +123,82 @@ class PointCloud(ABC):
     def rotate(self, axis="x", degrees=-90, center=(0, 0, 0)):
         self.points = self.rotate_points(
             self.points, axis=axis, degrees=degrees, center=center
+        )
+
+    @staticmethod
+    def compute_histogram_points(points: np.ndarray, indicator_cls: type[Indicator], bins: int = 50, range=None, normalize_points=False, normalize_histo=True)
+        indicator = indicator_cls(points, normalize=normalize_points)
+        values = indicator.compute()
+        hist, bin_edges = np.histogram(values, bins=bins, range=range)
+        if normalize_histo:
+            hist = HistogramDistance.normalize_hist(hist)
+        return hist, bin_edges
+    
+    @staticmethod
+    def plot_histogram_points(
+        points: np.ndarray,
+        indicator_cls: type[Indicator],
+        bins: int = 50,
+        range=None,
+        hist_data=None,
+        normalize_points: bool =False,
+        normalize_histo: bool = True,
+    ):
+        if hist_data is None:
+            hist, bin_edges = PointCloud.compute_histogram_points(
+                points, indicator_cls, bins=bins, range=range, normalize_points=normalize_points, normalize_histo=normalize_histo
+            )
+        else:
+            hist, bin_edges = hist_data
+
+        bin_centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])
+        plt.bar(
+            bin_centers,
+            hist,
+            width=bin_edges[1] - bin_edges[0],
+            alpha=0.7,
+            align="center",
+        )
+        plt.title(f"Histogramme de {indicator_cls.__name__}")
+        plt.xlabel("Valeur")
+        plt.ylabel("Fréquence")
+        plt.grid(True)
+        plt.show()
+
+    def compute_histogram(
+        self,
+        indicator_cls: type[Indicator],
+        bins: int = 50,
+        range=None,
+        normalize_points=False,
+        normalize_histo=True,
+    ):
+        return PointCloud.compute_histogram_points(
+            self.points,
+            indicator_cls,
+            bins=bins,
+            range=range,
+            normalize_points=normalize_points,
+            normalize_histo=normalize_histo,
+        )
+
+    def plot_histogram(
+        self,
+        indicator_cls: type[Indicator],
+        bins: int = 50,
+        range=None,
+        hist_data=None,
+        normalize_points=False,
+        normalize_histo=True,
+    ):
+        return PointCloud.plot_histogram_points(
+            self.points,
+            indicator_cls,
+            bins=bins,
+            range=range,
+            hist_data=hist_data,
+            normalize_points=normalize_points,
+            normalize_histo=normalize_histo,
         )
 
 
