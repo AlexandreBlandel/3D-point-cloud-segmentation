@@ -59,6 +59,9 @@ class PointCloud(ABC):
 
         # Étape 3 : Mise à l’échelle dans le cube [0, 1]^3
         return (points_normalized + 1) / 2
+    
+    def normalize(self):
+        self.points = self.normalize_points(self.points)
 
     def downsample(self, ratio=0.05, max_points=25_000):
         points = np.asarray(self.points)
@@ -116,9 +119,6 @@ class PointCloud(ABC):
             raise ValueError("Axe invalide. Choisir parmi 'x', 'y' ou 'z'.")
 
         return (points - center) @ R.T + center
-
-    def normalize(self):
-        self.points = self.normalize_points(self.points)
 
     def rotate(self, axis="x", degrees=-90, center=(0, 0, 0)):
         self.points = self.rotate_points(
