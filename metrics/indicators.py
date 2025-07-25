@@ -1,7 +1,6 @@
 import numpy as np
 from scipy.spatial import KDTree
 from abc import ABC, abstractmethod
-from point_cloud import PointCloud
 
 
 class Indicator(ABC):
@@ -10,9 +9,11 @@ class Indicator(ABC):
         self.normalize = normalize
 
     def _get_points(self):
-        return (
-            PointCloud.normalize_points(self.points) if self.normalize else self.points
-        )
+        if self.normalize:
+            from point_cloud import PointCloud
+            return PointCloud.normalize_points(self.points)
+        else:
+            return self.points
 
     @abstractmethod
     def compute(self):
