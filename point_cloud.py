@@ -37,7 +37,7 @@ class PointCloud(ABC):
             raise ValueError("les points et les couleurs ne sont pas de même taille")
         return len(self.points)
 
-    def visualiser(self, return_pc=True):
+    def visualiser(self, return_pc=False):
         # Créer un nuage de points Open3D
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(self.points)
