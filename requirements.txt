@@ -1,0 +1,9 @@
+numpy
+scipy
+matplotlib
+open3d
+trimesh
+pyvista
+pyransac3d
+pyransame
+scipy
