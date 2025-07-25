@@ -126,7 +126,7 @@ class PointCloud(ABC):
         )
 
     @staticmethod
-    def compute_histogram_points(points: np.ndarray, indicator_cls: type[Indicator], bins: int = 50, range=None, normalize_points=False, normalize_histo=True)
+    def compute_histogram_points(points: np.ndarray, indicator_cls: type[Indicator], bins: int = 50, range=None, normalize_points=False, normalize_histo=True):
         indicator = indicator_cls(points, normalize=normalize_points)
         values = indicator.compute()
         hist, bin_edges = np.histogram(values, bins=bins, range=range)
