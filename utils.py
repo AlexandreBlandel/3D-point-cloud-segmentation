@@ -68,13 +68,12 @@ def trim_to_pointcloud(mesh_scene):
 """
 
 
-def downsample_pcd(pcd, n_samples=10_000):
+def downsample_pcd(pcd, ratio=0.05, max_points=25_000):
     points = np.asarray(pcd.points)
     colors = np.asarray(pcd.colors)
-
-    if len(points) <= n_samples:
-        return pcd
-    idx = np.random.choice(len(points), n_samples, replace=False)
+    n = len(points)
+    m = int(min(ratio * n, max_points))
+    idx = np.random.choice(n, m, replace=False)
     sampled_pcd = o3d.geometry.PointCloud()
     sampled_pcd.points = o3d.utility.Vector3dVector(points[idx])
     sampled_pcd.colors = o3d.utility.Vector3dVector(colors[idx])
