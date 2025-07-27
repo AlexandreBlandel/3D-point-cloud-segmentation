@@ -11,6 +11,7 @@ from metrics.indicators import (
 from metrics.histogram_distance import HistogramDistance
 from metrics.metrics import Distance
 from point_cloud import PointCloud, npypcd, plypcd, o3dpcd, dictpcd
+import copy
 
 if __name__ == "__main__":
     # n = 1
@@ -18,7 +19,8 @@ if __name__ == "__main__":
     # compare_pc( pc_path="data/synthetiques/dataset_iter_outlier_dropout/sample_0000.npy", ref_pc_path="data/reel/Chalon_en_Champagne_1_candidates_pointcloud_keep.ply", metrics=["earth_mover", "sinkhorn", "schamfer"], indicators_to_plot=["distance_to_y_axis", "nearest_distance", "y_distribution"])
     pc = npypcd("data/synthetiques/dataset_iter_outlier_dropout/sample_0000.npy")
     pc_ref = plypcd("data/reel/Chalon_en_Champagne_1_candidates_pointcloud_keep.ply")
-    metrics = ["earth_mover", "sinkhorn", "schamfer"]
+
+    metrics = ["sinkhorn", "schamfer"]
     indicators_to_plot = ["distance_to_y_axis", "nearest_distance", "y_distribution"]
     indicator_map = {
         "nearest_distance": NearestNeighborDistanceIndicator,
@@ -27,17 +29,25 @@ if __name__ == "__main__":
     }
     hist_dist = HistogramDistance()
 
+
+    # Copie de sauvegarde
+    pc_raw = copy.deepcopy(pc)
+    pc_ref_raw = copy.deepcopy(pc_ref)
     # Visualisations et Histogrammes sans normalisation des points mais avec normalisation des histogrammes
-    pc.visualiser(return_pc=False)
-    pc_ref.visualiser(return_pc=False)
+    print("\n--- Visualisation brute ---")
+    pc.visualiser(return_pc=False, save=True)
+    pc_ref.visualiser(return_pc=False, save=True)
+
+    print("\n--- Comparaison des histogrammes (points bruts, hist normalisés) ---")
     for indicator_name in indicators_to_plot:
+        print(f"\n Indicateur : {indicator_name}")
         indicator_cls = indicator_map[indicator_name]
         hist, bin_edges = pc.compute_histogram(indicator_cls=indicator_cls)
-        pc.plot_histogram(hist=hist, bin_edges=bin_edges, indicator_cls=indicator_cls)
+        pc.plot_histogram(hist=hist, bin_edges=bin_edges, name=pc.name, indicator_cls=indicator_cls)
 
         hist_ref, bin_edges_ref = pc_ref.compute_histogram(indicator_cls=indicator_cls)
         pc_ref.plot_histogram(
-            hist=hist_ref, bin_edges=bin_edges_ref, indicator_cls=indicator_cls
+            hist=hist_ref, bin_edges=bin_edges_ref, name=pc_ref.name, indicator_cls=indicator_cls
         )
         print(f"  L1         : {hist_dist.l1(hist, hist_ref):.4f}")
         print(f"  L2         : {hist_dist.l2(hist, hist_ref):.4f}")
@@ -48,14 +58,16 @@ if __name__ == "__main__":
     # Visualisations et Histogrammes avec normalisation des points
     pc.normalize()  # attention, methode destructrice donc on perd le pc non normalisé
     pc_ref.normalize()  # idem
+    print("\n--- Comparaison des histogrammes après normalisation ---")
     for indicator_name in indicators_to_plot:
+        print(f"\n Indicateur : {indicator_name}")
         indicator_cls = indicator_map[indicator_name]
         hist, bin_edges = pc.compute_histogram(indicator_cls=indicator_cls)
-        pc.plot_histogram(hist=hist, bin_edges=bin_edges, indicator_cls=indicator_cls)
+        pc.plot_histogram(hist=hist, bin_edges=bin_edges, name=pc.name, indicator_cls=indicator_cls)
 
         hist_ref, bin_edges_ref = pc_ref.compute_histogram(indicator_cls=indicator_cls)
         pc_ref.plot_histogram(
-            hist=hist_ref, bin_edges=bin_edges_ref, indicator_cls=indicator_cls
+            hist=hist_ref, bin_edges=bin_edges_ref, name=pc_ref.name, indicator_cls=indicator_cls
         )
         print(f"  L1         : {hist_dist.l1(hist, hist_ref):.4f}")
         print(f"  L2         : {hist_dist.l2(hist, hist_ref):.4f}")
@@ -63,6 +75,7 @@ if __name__ == "__main__":
         print(f"  KL         : {hist_dist.kl_divergence(hist, hist_ref):.4f}")
         print(f"  Jensen-Shannon : {hist_dist.js_divergence(hist, hist_ref):.4f}")
 
+    print("\n--- Calcul des distances après downsampling + normalisation ---")
     # Downsampling et calcul des distances
     pc.downsample()  # attention, destructeur aussi ----> envisager de fair une version non destructrice
     pc_ref.downsample()  # idem
@@ -72,7 +85,7 @@ if __name__ == "__main__":
     for metric in metrics:
         method = getattr(distance, metric)
         try:
-            value = method(pc.points, pc_ref.points)
+            value = method(pc, pc_ref)
             print(f" {metric} : {value:.4f}")
         except Exception as e:
             print(f" Erreur lors du calcul de {metric} : {e}")
