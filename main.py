@@ -36,6 +36,7 @@ if __name__ == "__main__":
     # Visualisations et Histogrammes sans normalisation des points mais avec normalisation des histogrammes
     print("\n--- Visualisation brute ---")
     pc.visualiser(return_pc=False, save=True)
+    pc_ref.rotate()
     pc_ref.visualiser(return_pc=False, save=True)
 
     print("\n--- Comparaison des histogrammes (points bruts, hist normalisés) ---")
