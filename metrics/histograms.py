@@ -1,40 +1,32 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from metrics.indicators import Indicators
+from metrics.indicators import Indicator
 
 
 class PointCloudHistograms:
     def __init__(self, point_cloud):
         self.point_cloud = point_cloud
-        self.indicators = Indicators(point_cloud)
 
     def compute_histogram(
-        self, indicator_name: str, bins: int = 50, range=None, normalize=True
+        self, indicator: Indicator, bins: int = 50, range=None, normalize=True
     ):
         """
         Calcule l'histogramme de l'indicateur donné.
         """
-        if indicator_name not in Indicators.list_available():
-            raise ValueError(
-                f"Indicateur inconnu : {indicator_name}. "
-                f"Choisissez parmi : {Indicators.list_available()}"
-            )
-        values = self.indicators.compute(indicator_name)
+        values = indicator.compute()
         hist, bin_edges = np.histogram(values, bins=bins, range=range)
         if normalize:
             hist = self.normalize_hist(hist)
         return hist, bin_edges
 
     def plot_histogram(
-        self, indicator_name: str, bins: int = 50, range=None, hist_data=None
+        self, indicator: Indicator, bins: int = 50, range=None, hist_data=None
     ):
         """
         Affiche l'histogramme de l'indicateur donné.
         """
         if hist_data is None:
-            hist, bin_edges = self.compute_histogram(
-                indicator_name, bins=bins, range=range
-            )
+            hist, bin_edges = self.compute_histogram(indicator, bins=bins, range=range)
         else:
             hist, bin_edges = hist_data
         bin_centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])
@@ -46,7 +38,7 @@ class PointCloudHistograms:
             alpha=0.7,
             align="center",
         )
-        plt.title(f"Histogramme de {indicator_name}")
+        plt.title(f"Histogramme de {indicator.__class__.__name__}")
         plt.xlabel("Valeur")
         plt.ylabel("Fréquence")
         plt.grid(True)

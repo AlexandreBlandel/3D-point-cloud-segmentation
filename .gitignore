@@ -3,5 +3,9 @@
 *.obj
 __pycache__/
 */DPDist/
-entrainement_et_test/
+entrainement/
 */dataset*/
+/data/
+/figures/
+
+

@@ -4,12 +4,15 @@ import trimesh
 import pyransame
 import open3d as o3d
 import matplotlib.pyplot as plt
+import os
 from abc import ABC, abstractmethod
 from metrics.indicators import Indicator
 from metrics.histogram_distance import HistogramDistance
+from mpl_toolkits.mplot3d import Axes3D  
 
 class PointCloud(ABC):
     def __init__(self, source):
+        self.name=self.extract_name(source)
         self.points, self.colors = self.load(source)
 
     @abstractmethod
@@ -37,14 +40,42 @@ class PointCloud(ABC):
             raise ValueError("les points et les couleurs ne sont pas de même taille")
         return len(self.points)
 
-    def visualiser(self, return_pc=False):
-        # Créer un nuage de points Open3D
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(self.points)
-        pcd.colors = o3d.utility.Vector3dVector(self.colors)
-        o3d.visualization.draw_geometries([pcd])
+    @staticmethod
+    def extract_name(source):
+        if isinstance(source, str):
+            return os.path.splitext(os.path.basename(source))[0]
+        return "pointcloud"
+
+    #def visualiser(self, return_pc=False):
+    #    # Créer un nuage de points Open3D
+    #    pcd = o3d.geometry.PointCloud()
+    #    pcd.points = o3d.utility.Vector3dVector(self.points)
+    #    pcd.colors = o3d.utility.Vector3dVector(self.colors)
+    #    o3d.visualization.draw_geometries([pcd])
+    #    if return_pc:
+    #        return pcd
+
+    def visualiser(self, return_pc=False, elev=30, azim=45, figsize=(8, 6), save=False):
+
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111, projection='3d')
+
+        points = np.asarray(self.points)
+        colors = np.clip(np.asarray(self.colors), 0, 1) 
+
+        ax.scatter(points[:, 0], points[:, 1], points[:, 2], c=colors, s=0.5)
+        ax.set_title(f"Nuage de points - {self.name}")
+        ax.view_init(elev=elev, azim=azim)
+        ax.set_axis_off()
+
+        if save:
+            os.makedirs("figures", exist_ok=True)
+            plt.savefig(f"figures/{self.name}_matplotlib.png", bbox_inches="tight", dpi=300)
+
+        #plt.show()
+
         if return_pc:
-            return pcd
+            return points, colors
 
     @staticmethod
     def normalize_points(points: np.ndarray) -> np.ndarray:
@@ -126,11 +157,11 @@ class PointCloud(ABC):
         )
 
     @staticmethod
-    def compute_histogram_points(points: np.ndarray, indicator_cls: type[Indicator], bins: int = 50, range=None, normalize_points=False, normalize_histo=True)
+    def compute_histogram_points(points: np.ndarray, indicator_cls: type[Indicator], bins: int = 50, range=None, normalize_points=False, normalize_hist=True):
         indicator = indicator_cls(points, normalize=normalize_points)
         values = indicator.compute()
         hist, bin_edges = np.histogram(values, bins=bins, range=range)
-        if normalize_histo:
+        if normalize_hist:
             hist = HistogramDistance.normalize_hist(hist)
         return hist, bin_edges
 
@@ -140,7 +171,7 @@ class PointCloud(ABC):
         bins: int = 50,
         range=None,
         normalize_points=False,
-        normalize_histo=True,
+        normalize_hist=True,
     ):
         return PointCloud.compute_histogram_points(
             self.points,
@@ -148,11 +179,11 @@ class PointCloud(ABC):
             bins=bins,
             range=range,
             normalize_points=normalize_points,
-            normalize_histo=normalize_histo,
+            normalize_hist=normalize_hist,
         )
-    
+
     @staticmethod
-    def plot_histogram(hist, bin_edges, indicator_cls: type[Indicator]):
+    def plot_histogram(hist, bin_edges, name:str, indicator_cls: type[Indicator], bins: int =50, range=None, normalize_points=False, normalize_hist=True):
         bin_centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])
         plt.bar(
             bin_centers,
@@ -161,13 +192,13 @@ class PointCloud(ABC):
             alpha=0.7,
             align="center",
         )
-        plt.title(f"Histogramme de {indicator_cls.__name__}")
+        plt.title(f"Histogramme de {indicator_cls.__name__} du nuage de points ({name})")
         plt.xlabel("Valeur")
         plt.ylabel("Fréquence")
         plt.grid(True)
-        plt.show()
-
-
+        #plt.show()
+        plt.savefig(f"figures/{indicator_cls.__name__}_{name}.png")
+        plt.close()
 
 """  Pour la classe generators:      
     def ajout_bruit(self):

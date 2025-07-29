@@ -1,20 +1,20 @@
 import numpy as np
 from scipy.spatial import KDTree
-from abc import ABC, abstractmethod
-from point_cloud import PointCloud
+from abc import abstractmethod
 
 
-class Indicator(ABC):
+class Indicator():
     def __init__(self, points: np.ndarray, normalize=True):
         self.points = points
         self.normalize = normalize
 
     def _get_points(self):
-        return (
-            PointCloud.normalize_points(self.points) if self.normalize else self.points
-        )
+        if self.normalize:
+            from point_cloud import PointCloud
+            return PointCloud.normalize_points(self.points)
+        else:
+            return self.points
 
-    @abstractmethod
     def compute(self):
         raise ValueError(
             ("La méthode compute() doit être implémentée dans la sous-classe.")
