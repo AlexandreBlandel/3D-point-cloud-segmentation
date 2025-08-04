@@ -7,3 +7,4 @@ pyvista
 pyransac3d
 pyransame
 scipy
+pot
