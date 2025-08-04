@@ -59,7 +59,7 @@ class Distance_to_ref(Metrics_to_ref):
         return self.metrics_values
 
     
-class Indicator_to_ref(ABC):
+class Indicator_to_ref(Metrics_to_ref):
     def __init__(self, synthe_repository:str, reel_repository: str, indicator: Indicator, hist_dist: HistogramDistance):
         super().__init__(synthe_repository=synthe_repository, reel_repository=reel_repository, metrics=indicator)
         self.hist_dist=hist_dist
