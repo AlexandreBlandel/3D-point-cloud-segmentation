@@ -5,6 +5,8 @@ Fichier pour implémenter les métriques permettant d'évaluer la qualité des d
 import numpy as np
 from point_cloud import PointCloud
 from abc import ABC, abstractmethod
+from metrics.histogram_distance import HistogramDistance
+from metrics.indicators import Indicator
 import ot
 
 
@@ -106,3 +108,16 @@ class SchamferDistance(Distance):
         C12 = np.sum(np.min(M, axis=1)) / n
         C21 = np.sum(np.min(M, axis=0)) / m
         return C12 + C21
+
+class Indicator_distance(Distance):
+    def __init__(self, indicator:Indicator, hist_dist: HistogramDistance, normalize=True):
+        super().__init__(normalize=normalize)
+        self.indicator=indicator
+        self.hist_dist=hist_dist
+
+    def compute(self, pc_1, pc_2):
+        pc_1, pc_2=self._prepare(pc_1, pc_2)
+        hist_1=pc_1.compute_histogram(indicator=self.indicator)
+        hist_2=pc_2.compute_histogram(indicator=self.indicator)
+        
+        return self.hist_dist.compute(hist_1, hist_2)
