@@ -10,12 +10,12 @@ from metrics.histogram_distance import HistogramDistance
 from abc import ABC, abstractmethod
 
 
-class Metrics_to_ref(ABC):
-    def __init__(self, synthe_repository:str, reel_repository: str, metrics, max_size_repository=500):
+class Distance_to_ref(ABC):
+    def __init__(self, synthe_repository:str, reel_repository: str, distance:Distance, max_size_repository=500):
         self.synthe_repository=synthe_repository
         self.reel_repository=reel_repository
-        self.metrics=metrics
-        self.metrics_values=None
+        self.distance=distance
+        self.distance_values=None
         self.max_size_repository=500
 
     def load(self):
@@ -29,51 +29,32 @@ class Metrics_to_ref(ABC):
             for f in os.listdir(self.reel_repository) 
             if f.endswith(".npy") or f.endswith(".ply")
         ])
-        synthe_pcs=[npypcd(source) for source in synthe_files]
-        reel_pcs=[plypcd(source) for source in reel_files]
-        return synthe_pcs, reel_pcs
+        return synthe_files, reel_files
 
-    @abstractmethod
+    def generate_batches(self, files, batch_size):
+        """Génère des batches de PointClouds et leur indice de départ"""
+        for i in range(0, len(files), batch_size):
+            batch_files = files[i:i + batch_size]
+            pcs = [npypcd(f) if f.endswith(".npy") else plypcd(f) for f in batch_files]
+            yield i, pcs  # pcs = liste de PointCloud, i = indice global de départ
+
+
     def compute(self):
-        """return le tableau de la valeur des métriques de similarite entre pc synthetique (colonne) et pc reel (ligne)"""
-        pass
+        synthe_pcs, reel_pcs=self.load()
+        self.distance_values = np.zeros((len(reel_pcs), len(synthe_pcs)))
+        for i, reel_batch in self.generate_batches(reel_pcs, self.max_size_repository):
+            for j, synthe_batch in self.generate_batches(synthe_pcs, self.max_size_repository):
+                for i_local, pc_reel in enumerate(reel_batch):
+                    i_global=i + i_local
+                    for j_local, pc_synthe in enumerate(synthe_batch):
+                        j_global=j+j_local
+                        self.distance_values[i_local, j_local] = self.distance.compute(pc_reel, pc_synthe)
+
+        return self.distance_values
 
     def mean(self):
         """return la valeur moyenne du tableau des métriques de similarite"""
-        if self.metrics_values is None:
+        if self.distance_values is None:
             raise ValueError("You must call compute() before mean()")
-        return np.mean(self.metrics_values)
-    
-
-class Distance_to_ref(Metrics_to_ref):
-    def __init__(self, synthe_repository:str, reel_repository: str, distance: Distance):
-        super().__init__(synthe_repository=synthe_repository, reel_repository=reel_repository, metrics=distance, max_size_repository=500)
-
-    def compute(self):
-        synthe_pcs, reel_pcs=self.load()
-        self.metrics_values = np.zeros((len(reel_pcs), len(synthe_pcs)))
-        for i, pc_reel in enumerate(reel_pcs):
-            for j, pc_synthe in enumerate(synthe_pcs):
-                self.metrics_values[i, j] = self.metrics.compute(pc_reel, pc_synthe)
-
-        return self.metrics_values
-
-    
-class Indicator_to_ref(Metrics_to_ref):
-    def __init__(self, synthe_repository:str, reel_repository: str, indicator: Indicator, hist_dist: HistogramDistance):
-        super().__init__(synthe_repository=synthe_repository, reel_repository=reel_repository, metrics=indicator)
-        self.hist_dist=hist_dist
-
-    def compute(self):
-        synthe_pcs, reel_pcs=self.load()
-        self.metrics_values = np.zeros((len(reel_pcs), len(synthe_pcs)))
-        for i, pc_reel in enumerate(reel_pcs):
-            for j, pc_synthe in enumerate(synthe_pcs):
-                hist_i = self.metrics.compute(pc_synthe)
-                hist_j = self.metrics.compute(pc_reel)
-                self.metrics_values[i, j]=self.hist_dist.compute(hist_i, hist_j)
-
-        return self.metrics_values
-    
-
+        return np.mean(self.distance_values)
     
