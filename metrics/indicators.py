@@ -1,43 +1,38 @@
 import numpy as np
 from scipy.spatial import KDTree
+from point_cloud import PointCloud
 from abc import abstractmethod
 
 
 class Indicator():
-    def __init__(self, points: np.ndarray, normalize=True):
-        self.points = points
-        self.normalize = normalize
-
-    def _get_points(self):
-        if self.normalize:
-            from point_cloud import PointCloud
-            return PointCloud.normalize_points(self.points)
-        else:
-            return self.points
-
-    def compute(self):
-        raise ValueError(
-            ("La méthode compute() doit être implémentée dans la sous-classe.")
+    """
+    classe abstraite
+    """
+    @abstractmethod
+    def compute(self, pc:PointCloud):
+        raise NotImplementedError(
+            ("compute() doit être implémentée dans la sous-classe.")
         )
+
+    def __call__(self, pc: PointCloud):
+        return self.compute(pc)
+
 
 
 class NearestNeighborDistanceIndicator(Indicator):
-    def compute(self):
-        points = self._get_points()
-        if points.shape[0] < 2:
+    def compute(self, pc:PointCloud):
+        if pc.points.shape[0] < 2:
             return np.array([])
-        tree = KDTree(points)
-        dists, _ = tree.query(points, k=2)
+        tree = KDTree(pc.points)
+        dists, _ = tree.query(pc.points, k=2)
         return dists[:, 1]
 
 
 class DistanceToYAxisIndicator(Indicator):
-    def compute(self):
-        points = self._get_points()
-        return np.linalg.norm(points[:, [0, 2]], axis=1)
+    def compute(self, pc: PointCloud):
+        return np.linalg.norm(pc.points[:, [0, 2]], axis=1)
 
 
 class YCoordinateDistributionIndicator(Indicator):
-    def compute(self):
-        points = self._get_points()
-        return points[:, 1]
+    def compute(self, pc: PointCloud):
+        return pc.points[:, 1]
