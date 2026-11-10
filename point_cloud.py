@@ -6,7 +6,7 @@ import open3d as o3d
 import matplotlib.pyplot as plt
 import os
 from abc import ABC, abstractmethod
-from metrics.histogram_distance import HistogramDistance
+from metrics.histogram_distance import HistogramDistances
 from mpl_toolkits.mplot3d import Axes3D  
 
 class PointCloud(ABC):
@@ -109,7 +109,7 @@ class PointCloud(ABC):
         values=indicator.compute(self)
         hist, bin_edges = np.histogram(values, bins=bins, range=range)
         if normalize_hist:
-            hist = HistogramDistance.normalize_hist(hist)
+            hist = HistogramDistances.normalize_hist(hist)
         return hist, bin_edges
 
 

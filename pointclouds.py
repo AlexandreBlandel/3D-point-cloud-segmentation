@@ -4,7 +4,7 @@ import open3d as o3d
 import matplotlib.pyplot as plt
 import pyvista as pv
 from abc import ABC, abstractmethod
-from metrics.histogram_distance import HistogramDistance
+from metrics.histogram_distance import HistogramDistances
 
 def load_from_ply(source: str):
     """
@@ -48,7 +48,7 @@ def load_from_ply(source: str):
         names.append(name)
 
     labels = None
-    return points_list, colors_list, labels, names
+    return PointClouds(points_list, colors_list, labels, names)
 
 def load_from_npy(source: str,
                   color_0=[0.6, 0.6, 0.6],
@@ -94,18 +94,40 @@ def load_from_npy(source: str,
         labels_list.append(np.asarray(labels))
         names_list.append(name)
 
-    return points_list, colors_list, labels_list, names_list
+    return PointClouds(points_list, colors_list, labels_list, names_list)
 
-def load_from_dict(source:dict, color_0=[0.6, 0.6, 0.6], color_1=[0.0, 0.8, 0.0], color_2=[1.0, 0.0, 0.0]):
-    points = source["points"]
-    labels = source["labels"]
+def load_from_dicts(dicts: list, 
+                    color_0=[0.6, 0.6, 0.6], 
+                    color_1=[0.0, 0.8, 0.0], 
+                    color_2=[1.0, 0.0, 0.0]):
+    """
+    Charge une liste de dictionnaires contenant des nuages de points.
 
-    colors = np.zeros_like(points)
-    colors[labels == 0] = color_0  
-    colors[labels == 1] = color_1  
-    colors[labels == 2] = color_2 
+    Chaque dictionnaire doit avoir les clés "points" et "labels".
 
-    return [np.asarray(points)], [np.asarray(colors)], [np.asarray(labels)], ["dictpcd"]
+    Retourne :
+        - un objet PointClouds
+    """
+    points_list = []
+    colors_list = []
+    labels_list = []
+    names_list = []
+
+    for i, d in enumerate(dicts):
+        points = np.asarray(d["points"])
+        labels = np.asarray(d["labels"])
+
+        colors = np.zeros_like(points)
+        colors[labels == 0] = color_0
+        colors[labels == 1] = color_1
+        colors[labels == 2] = color_2
+
+        points_list.append(points)
+        colors_list.append(colors)
+        labels_list.append(labels)
+        names_list.append(f"dictpcd_{i:04d}")
+
+    return PointClouds(points_list, colors_list, labels_list, names_list)
 
 class PointClouds(ABC):
     def __init__(self, points: list, colors: list, labels: list = None, names=None):
@@ -153,7 +175,7 @@ class PointClouds(ABC):
                 print(f"✅ Nuage sauvegardé en .ply : {filename}")
             else:
                 filename = os.path.join(save_repository, f"{name}.npy")
-                np.save(f"{filename}.npy",{"points":self.points[i], "labels":self.labels[i]})
+                np.save(f"{filename}",{"points":self.points[i], "labels":self.labels[i]})
                 print(f"✅ Nuage sauvegardé en .npy : {filename}")
 
     def normalize(self):
@@ -185,7 +207,7 @@ class PointClouds(ABC):
             values=indicator.compute(pc_i)
             hist, bin_edge = np.histogram(values, bins=bins, range=range)
             if normalize_hist:
-                hist = HistogramDistance.normalize_hist(hist)
+                hist = HistogramDistances.normalize_hist(hist)
             hists.append(hist)
             bin_edges.append(bin_edge)
         
@@ -215,7 +237,7 @@ class PointClouds(ABC):
     def visualiser(self, idx=0, filename=None):
         """
         Visualise le nuage de points à l'index `idx` du batch.
-        Enregistre un fichier HTML dans le dossier `figures` si `save=True`.
+        Enregistre un fichier HTML dans le dossier `figures`.
         """
         if idx >= self.B:
             raise IndexError(f"Index {idx} hors limites pour un batch de taille {self.B}")

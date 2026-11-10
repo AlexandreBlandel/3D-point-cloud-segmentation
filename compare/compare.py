@@ -1,11 +1,11 @@
-from metrics.metrics import Distance
+from metrics.pointcloud_distance import PointCloudDistances
 from metrics.histograms import PointCloudHistograms
 from utils import normalisation
 from compare.visualisation import visualiser_sample_open3d_robuste
 from utils import downsample_pcd
 from utils import rotate_pcd
 import numpy as np
-from metrics.histogram_distance import HistogramDistance
+from metrics.histogram_distance import HistogramDistances
 
 
 def compare_pc(
@@ -38,7 +38,7 @@ def compare_pc(
 
     # === Calcul des métriques de distance
     print(" Distances entre les deux nuages :")
-    distance_obj = Distance(normalize=False)  # On a déjà normalisé
+    distance_obj = PointCloudDistances(normalize=False)  # On a déjà normalisé
 
     for metric in metrics:
         method = getattr(distance_obj, metric)
@@ -52,7 +52,7 @@ def compare_pc(
     print("\n Histogrammes des indicateurs :")
     pc_hist = PointCloudHistograms(points)
     ref_pc_hist = PointCloudHistograms(ref_points)
-    dist = HistogramDistance()
+    dist = HistogramDistances()
     for indicator in indicators_to_plot:
         try:
             print(f"\n▶ Indicateur : {indicator}")

@@ -9,10 +9,12 @@ from metrics.indicators import (
     DistanceToYAxisIndicator,
     YCoordinateDistributionIndicator,
 )
-from metrics.histogram_distance import HistogramDistance
-from data_augmentation import DataAugmenter, PCDataAugmenter, BatchPCDataAugmenter
-from metrics.metrics import EarthMoverDistance, SinkhornDistance, SchamferDistance
+from metrics.histogram_distance import HistogramDistances
+from metrics.batch_distance_to_reference import Distance_to_ref
+from data_augmentation import DataAugmenter
+from metrics.pointcloud_distance import EarthMoverDistance, SinkhornDistance, ChamferDistance
 from point_cloud import PointCloud, npypcd, plypcd, dictpcd
+from pointclouds import PointClouds, load_from_dicts, load_from_npy, load_from_ply
 import copy
 
 if __name__ == "__main__":
@@ -25,7 +27,47 @@ if __name__ == "__main__":
     # trans = np.random.uniform([-0.05, -0.05, -0.05], [0.05, 0.05, 0.05], size=(self.n, 1, 3))
     # angle = np.random.uniform(0, 2.2, size=(self.n, 1, 1))
     # scale_error = np.random.uniform(-0.05, 0.05, size=(self.n, 1, 1))
-    
+
+    source_corolle="Corolle_L_pour_Canoscan_NonRenf_Filins_MESH.obj"
+    n=7
+    # save_repository="data/synthetiques/dataset_iteratif_oriente_objet_v2"
+    save_repository="data/synthetiques/dataset_naif_oriente_objet_v2"
+    pre_gen_augmenter= DataAugmenter(sigma_min=0.0005, sigma_max=0.0015, 
+                                            trans=0.05, angle_range_deg=2.2, scale=0.05,
+                                            min_dropout_ratio=0, max_dropout_ratio=1, dropout_borne=False,
+                                            rd_sigma=True, rd_trans=True, rd_angle=True, rd_scale=True, rd_dropout=False
+    )
+    post_gen_augmenter=DataAugmenter(sigma_min=0, sigma_max=0, trans=0, angle_range_deg=11, scale=0.25, 
+                                       min_dropout_ratio=0, max_dropout_ratio=0.4, dropout_borne=False,
+                                       rd_sigma=False, rd_trans=False, rd_angle=True, rd_scale=True, rd_dropout=True)
+    with_outliers=True
+    # generateur_iteratif=GenerateurIteratif(source_corolle=source_corolle, n=n,n_plants_min=8, n_plants_max=25, save_repository=save_repository,
+    #                               pre_gen_augmenter=pre_gen_augmenter, post_gen_augmenter=post_gen_augmenter, 
+    #                               with_outliers=with_outliers, n_outliers_min=250, n_outliers_max=1_500,
+    #                               min_density=1_500_000,max_density=3_000_000,
+    #                               min_radius=0.0215, max_radius=0.0305,
+    #                               min_decay_density=0.811, max_decay_density=0.899,
+    #                               min_decay_radius=0.965, max_decay_radius=0.989,
+    #                               min_depth=75, max_depth=350)
+
+    # generateur_iteratif.gen_dataset()
+
+    generateur_naif=GenerateurNaif(source_corolle=source_corolle, n=n, save_repository=save_repository, pre_gen_augmenter=pre_gen_augmenter, post_gen_augmenter=post_gen_augmenter, with_outliers=with_outliers)
+
+    generateur_naif.gen_dataset()
+
+    for i in range(n):
+        pc=load_from_npy(f"data/synthetiques/dataset_naif_oriente_objet_v2/sample_{i:04d}.npy")
+        pc.visualiser(filename=f"sample_{i:04d}_test_poo")
+
+    """
+    EM_distance_to_ref=Distance_to_ref(synthe_repository="data/synthetiques/dataset_iteratif_oriente_objet", reel_repository="data/reel", metrics=EarthMoverDistance(), max_size_repository=500)
+    mean_EM_distances_to_ref=EM_distance_to_ref.mean()
+    EM_Y_distibution_distance_to_ref_histo=Indicator_to_ref(synthe_repository="data/synthetiques/dataset_iteratif_oriente_objet", reel_repository="data/reel", metrics=YCoordinateDistributionIndicator(), max_size_repository=500)
+    mean_EM_Y_distibution_distances_to_ref_histo=EM_Y_distibution_distance_to_ref_histo.mean()
+    """
+
+"""
     source_corolle="Corolle_L_pour_Canoscan_NonRenf_Filins_MESH.obj"
     n=1000
     save_repository="data/synthetiques/dataset_iteratif_oriente_objet"
@@ -46,8 +88,9 @@ if __name__ == "__main__":
                                    min_decay_density=0.811, max_decay_density=0.899,
                                    min_decay_radius=0.965, max_decay_radius=0.989,
                                    min_depth=75, max_depth=350)
-    
+   
     generateur_iteratif.gen_dataset()
+"""
 #    for i in range(n):
 #        pc=npypcd(f"data/synthetiques/dataset_iteratif_oriente_objet/sample_{i:04d}.npy")
 #        pc.visualiser(save=True, filename=f"sample_{i:04d}_test_poo")
@@ -93,7 +136,7 @@ if __name__ == "__main__":
     y_distribution=YCoordinateDistributionIndicator()
     indicators=[nearest_neighbor, distance_to_y, y_distribution]
 
-    hist_dist = HistogramDistance()
+    hist_dist = HistogramDistances()
 
     # Copie de sauvegarde
     pc_raw = copy.deepcopy(pc)

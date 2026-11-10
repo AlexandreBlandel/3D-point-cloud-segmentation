@@ -4,14 +4,14 @@ fichier pour implémenter une classe calculant les distances etc entre les nuage
 import numpy as np
 import os
 from point_cloud import PointCloud, npypcd, plypcd, dictpcd
-from metrics.metrics import Distance
+from metrics.pointcloud_distance import PointCloudDistances
 from metrics.indicators import Indicator
-from metrics.histogram_distance import HistogramDistance
+from metrics.histogram_distance import HistogramDistances
 from abc import ABC, abstractmethod
 
 
 class Distance_to_ref(ABC):
-    def __init__(self, synthe_repository:str, reel_repository: str, distance:Distance, max_size_repository=500):
+    def __init__(self, synthe_repository:str, reel_repository: str, distance:PointCloudDistances, max_size_repository=500):
         self.synthe_repository=synthe_repository
         self.reel_repository=reel_repository
         self.distance=distance

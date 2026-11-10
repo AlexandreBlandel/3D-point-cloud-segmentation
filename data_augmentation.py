@@ -23,7 +23,116 @@ from batch_point_cloud import BatchPointCloud
 #        base_points, sigma, trans, angle, scale_error
 #    )
 
+class DataAugmenter:
+    def __init__(
+        self,
+        sigma_min, sigma_max,
+        trans,
+        angle_range_deg,
+        scale,
+        min_dropout_ratio, max_dropout_ratio,
+        max_points=25_000, dropout_borne=True,
+        rd_sigma=True, rd_trans=True, rd_angle=True, rd_scale=True, rd_dropout=True
+    ):
+        self.sigma_min = sigma_min
+        self.sigma_max = sigma_max
+        self.trans = trans
+        self.angle_range_deg = angle_range_deg
+        self.scale = scale
+        self.min_dropout_ratio = min_dropout_ratio
+        self.max_dropout_ratio = max_dropout_ratio
+        self.max_points = max_points
+        self.dropout_borne = dropout_borne
 
+        self.rd_sigma = rd_sigma
+        self.rd_trans = rd_trans
+        self.rd_angle = rd_angle
+        self.rd_scale = rd_scale
+        self.rd_dropout = rd_dropout
+
+    def ajout_bruit_gaussien(self, pcs):
+        for i in range(len(pcs)):
+            n = pcs.points[i].shape[0]
+            sigma = np.random.uniform(self.sigma_min, self.sigma_max) if self.rd_sigma else self.sigma_min
+            noise = np.random.normal(0, sigma, size=(n, 3))
+            pcs.points[i] += noise
+        return pcs
+
+    def apply_translation(self, pcs):
+        for i in range(len(pcs)):
+            translation = np.random.uniform(-self.trans, self.trans, size=(1, 3)) if self.rd_trans else np.zeros((1, 3))
+            pcs.points[i] += translation
+        return pcs
+
+    def apply_rotation(self, pcs, axis="x", degrees=None):
+        """
+        Applique une rotation autour de l'axe spécifié à chaque nuage de points du batch.
+
+        Paramètres :
+            - pcs : un objet PointClouds
+            - axis : 'x', 'y' ou 'z'
+            - degrees : si None, tiré aléatoirement selon angle_range_deg
+        """
+        deg = np.random.uniform(-self.angle_range_deg, self.angle_range_deg) if degrees is None else degrees
+        radians = np.deg2rad(deg)
+        if axis == "x":
+            R = self.rotation_matrix_xyz(radians, 0, 0)
+        elif axis == "y":
+            R = self.rotation_matrix_xyz(0, radians, 0)
+        elif axis == "z":
+            R = self.rotation_matrix_xyz(0, 0, radians)
+        else:
+            raise ValueError("Axis must be 'x', 'y' or 'z'")
+        for i in range(len(pcs)):
+            pcs.points[i] = pcs.points[i] @ R.T
+        return pcs
+
+
+    def apply_random_rotation(self, pcs):
+        for i in range(len(pcs)):
+            angles = np.deg2rad(np.random.uniform(-self.angle_range_deg, self.angle_range_deg, size=3))
+            R = self.rotation_matrix_xyz(*angles)
+            pcs.points[i] = pcs.points[i] @ R.T
+        return pcs
+
+    def apply_scaling(self, pcs):
+        for i in range(len(pcs)):
+            s = np.random.uniform(1 - self.scale, 1 + self.scale) if self.rd_scale else 1 + self.scale
+            pcs.points[i] *= s
+        return pcs
+
+    def apply_dropout(self, pcs):
+        for i in range(len(pcs)):
+            n = pcs.points[i].shape[0]
+            ratio = np.random.uniform(self.min_dropout_ratio, self.max_dropout_ratio) if self.rd_dropout else self.min_dropout_ratio
+            n_keep = max(int((1 - ratio) * n), 1)
+            if self.dropout_borne:
+                n_keep = min(n_keep, self.max_points)
+            idx = np.random.choice(n, n_keep, replace=False)
+            pcs.points[i] = pcs.points[i][idx]
+            pcs.colors[i] = pcs.colors[i][idx]
+            if pcs.labels is not None:
+                pcs.labels[i] = pcs.labels[i][idx]
+        return pcs
+
+    @staticmethod
+    def rotation_matrix_xyz(angle_x, angle_y, angle_z):
+        Rx = np.array([[1, 0, 0], [0, np.cos(angle_x), -np.sin(angle_x)], [0, np.sin(angle_x), np.cos(angle_x)]])
+        Ry = np.array([[np.cos(angle_y), 0, np.sin(angle_y)], [0, 1, 0], [-np.sin(angle_y), 0, np.cos(angle_y)]])
+        Rz = np.array([[np.cos(angle_z), -np.sin(angle_z), 0], [np.sin(angle_z), np.cos(angle_z), 0], [0, 0, 1]])
+        return Rz @ Ry @ Rx
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(" + ", ".join([
+            f"sigma=({self.sigma_min}, {self.sigma_max})",
+            f"trans={self.trans}",
+            f"angle_range_deg={self.angle_range_deg}",
+            f"scale={self.scale}",
+            f"dropout=({self.min_dropout_ratio}, {self.max_dropout_ratio})"
+        ]) + ")"
+
+
+"""
 class DataAugmenter(ABC):
     def __init__(
         self,
@@ -256,7 +365,7 @@ class BatchPCDataAugmenter(DataAugmenter):
         return pcs
 
 
-"""
+
 def ajout_bruit_gaussien(pc, sigma_min, sigma_max, rd_sigma: bool = True):
     
     Applies gaussian noise on the points

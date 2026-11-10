@@ -6,13 +6,14 @@ import pyransame
 import math
 import os
 from point_cloud import PointCloud, dictpcd, npypcd, plypcd
-from data_augmentation import DataAugmenter, PCDataAugmenter, BatchPCDataAugmenter
+from data_augmentation import DataAugmenter
 from abc import ABC, abstractmethod
 from scipy.spatial import KDTree
+from pointclouds import load_from_dicts, load_from_npy, load_from_ply, PointClouds
 
 class Generateurs(ABC):
     def __init__(self, source_corolle: str, n:int, save_repository:str, 
-                 pre_gen_augmenter:BatchPCDataAugmenter, post_gen_augmenter:PCDataAugmenter, 
+                 pre_gen_augmenter: DataAugmenter, post_gen_augmenter: DataAugmenter, 
                  with_outliers:bool, n_outliers_min:int = 500, n_outliers_max=2500,
                  normalize_points:bool=True, drop_pot:bool=True, max_single_batch=500):
         self.corolle=self.trim_to_point_cloud(trimesh.load(source_corolle, force="scene"), normalize=normalize_points)
@@ -48,20 +49,21 @@ class Generateurs(ABC):
             "labels": np.zeros(len(corolle_points), dtype=int)
         }
 
-        pc=dictpcd(source=data)
+        pcs=load_from_dicts([data])
 
         if normalize:
-            pc = pc.normalize()
-        return pc
+            pcs = pcs.normalize()
+        return pcs
 
     @staticmethod
-    def drop(pc:PointCloud):
-        mask = pc.points[:, 1] >= 0.45
-        pc.points = pc.points[mask]
-        pc.colors = pc.colors[mask]
-        if pc.labels is not None:
-            pc.labels=pc.labels[mask]
-        return pc
+    def drop(pcs:PointClouds):
+        for i in range(len(pcs)):
+            mask = pcs.points[i][:, 1] >= 0.45
+            pcs.points[i] = pcs.points[i][mask]
+            pcs.colors[i] = pcs.colors[i][mask]
+            if pcs.labels is not None:
+                pcs.labels[i]=pcs.labels[i][mask]
+        return pcs
 
     @staticmethod
     def generate_sphere_points(x, y, z, radius, density, y_min=0.4):
@@ -86,47 +88,52 @@ class Generateurs(ABC):
 
         return points
     
-    def gen_outliers(self, pc, n_outliers=1000, lateral_std=0.05, vertical_std=0.02, y_jitter_centered=True, min_outliers=10):
-        points=np.asarray(pc.points)
-        if points.ndim==2:
-            points=points[np.newaxis, :, :]
+    def gen_outliers(self, pcs:PointClouds, n_outliers=1000, lateral_std=0.05, vertical_std=0.02, y_jitter_centered=True, min_outliers=10):
+        outliers_dicts=[None for _ in range(len(pcs))]
+        for i in range(len(pcs)):
+            pc=pcs[i]
+            points=np.asarray(pc.points)
+            if points.ndim==2:
+                points=points[np.newaxis, :, :]
 
-        n, N, _ = points.shape
-        valid_mask = points[:, :, 1] >= 0.45
-        valid_counts = valid_mask.sum(axis=1)
+            n, N, _ = points.shape
+            valid_mask = points[:, :, 1] >= 0.45
+            valid_counts = valid_mask.sum(axis=1)
 
-        k = n_outliers
-        while np.any(valid_counts < k):
-            k //= 2
-            if k < min_outliers:
-                raise ValueError(
-                    f"Impossible de générer au moins {min_outliers} outliers avec y ≥ 0.45 pour toutes les corolles." 
-                )
+            k = n_outliers
+            while np.any(valid_counts < k):
+                k //= 2
+                if k < min_outliers:
+                    raise ValueError(
+                        f"Impossible de générer au moins {min_outliers} outliers avec y ≥ 0.45 pour toutes les corolles." 
+                    )
 
-        rand = np.random.rand(n, N)
-        rand[~valid_mask] = np.inf
-        topk_indices = np.argpartition(rand, k, axis=1)[:, :k]
-        base_points = np.take_along_axis(points, topk_indices[:, :, None], axis=1)
+            rand = np.random.rand(n, N)
+            rand[~valid_mask] = np.inf
+            topk_indices = np.argpartition(rand, k, axis=1)[:, :k]
+            base_points = np.take_along_axis(points, topk_indices[:, :, None], axis=1)
 
-        offset_xz = np.random.normal(scale=lateral_std, size=(n, k, 2))
-        offset_y = (np.random.normal(scale=vertical_std, size=(n, k, 1)) if y_jitter_centered
-                    else -np.abs(np.random.normal(scale=vertical_std, size=(n, k, 1))))
+            offset_xz = np.random.normal(scale=lateral_std, size=(n, k, 2))
+            offset_y = (np.random.normal(scale=vertical_std, size=(n, k, 1)) if y_jitter_centered
+                        else -np.abs(np.random.normal(scale=vertical_std, size=(n, k, 1))))
 
-        offsets = np.zeros_like(base_points)
-        offsets[..., 0] = offset_xz[..., 0]
-        offsets[..., 1] = offset_y[..., 0]
-        offsets[..., 2] = offset_xz[..., 1]
+            offsets = np.zeros_like(base_points)
+            offsets[..., 0] = offset_xz[..., 0]
+            offsets[..., 1] = offset_y[..., 0]
+            offsets[..., 2] = offset_xz[..., 1]
 
-        outliers = base_points + offsets
-        outliers = outliers.squeeze(0) if outliers.shape[0] == 1 else outliers
+            outliers = base_points + offsets
+            outliers = outliers.squeeze(0) if outliers.shape[0] == 1 else outliers
 
-        if outliers.ndim == 2:
-            labels=np.full(outliers.shape[0], 2, dtype=int)
-        else:
-            outliers=outliers.reshape(-1, 3)
-            labels=np.full(outliers.shape[0], 2, dtype=int)
-        data={"points": outliers, "labels": labels}
-        return dictpcd(data)
+            if outliers.ndim == 2:
+                labels=np.full(outliers.shape[0], 2, dtype=int)
+            else:
+                outliers=outliers.reshape(-1, 3)
+                labels=np.full(outliers.shape[0], 2, dtype=int)
+            outliers_dict={"points": outliers, "labels": labels}
+            outliers_dicts[i]=outliers_dict
+        outliers_pcs=load_from_dicts(outliers_dicts)
+        return outliers_pcs
     
     @abstractmethod
     def gen_points(self):
@@ -186,206 +193,219 @@ class Generateurs(ABC):
 
 
 class GenerateurNaif(Generateurs):
-    def __init__(self, source_corolle: str, n:int, save_repository:str, 
-                 pre_gen_augmenter:BatchPCDataAugmenter, post_gen_augmenter:PCDataAugmenter, 
-                 with_outliers:bool, n_outliers_min=500, n_outliers_max=5_000,
-                 normalize_points:bool=True, drop_pot:bool=True, max_single_batch=500,
-                 n_sphere_min=2_500, n_sphere_max=15000, max_rad_sphere=0.035, min_dens= 1_000_000, max_dens=10_000_000):
-        super().__init__(source_corolle, n, save_repository, 
-                         pre_gen_augmenter, post_gen_augmenter, 
+    def __init__(self, source_corolle: str, n: int, save_repository: str,
+                 pre_gen_augmenter: DataAugmenter, post_gen_augmenter: DataAugmenter,
+                 with_outliers: bool, n_outliers_min=500, n_outliers_max=5_000,
+                 normalize_points: bool = True, drop_pot: bool = True, max_single_batch=500,
+                 n_sphere_min=2_500, n_sphere_max=15_000, max_rad_sphere=0.035,
+                 min_dens=1_000_000, max_dens=10_000_000):
+        super().__init__(source_corolle, n, save_repository,
+                         pre_gen_augmenter, post_gen_augmenter,
                          with_outliers, n_outliers_min, n_outliers_max,
                          normalize_points, drop_pot, max_single_batch)
-        self.n_sphere_min=n_sphere_min
-        self.n_sphere_max=n_sphere_max
-        self.max_rad_sphere=max_rad_sphere
-        self.min_dens=min_dens
-        self.max_dens=max_dens
-    
-    def rd_add_single_sphere(self, pc, radius:float, density):
-        k=rd.randint(0, pc.size-1)
-        x, y, z=pc.points[k]
-        new_points=self.generate_sphere_points(x, y, z, radius, density)
+        self.n_sphere_min = n_sphere_min
+        self.n_sphere_max = n_sphere_max
+        self.max_rad_sphere = max_rad_sphere
+        self.min_dens = min_dens
+        self.max_dens = max_dens
+
+    def rd_add_single_sphere(self, pc: PointClouds, radius: float, density: int):
+        k = rd.randint(0, pc.points[0].shape[0] - 1)
+        x, y, z = pc.points[0][k]
+        new_points = self.generate_sphere_points(x, y, z, radius, density)
         return new_points
 
-    def gen_points(self, pc: PointCloud):
-        n_sphere=rd.randint(self.n_sphere_min, self.n_sphere_max)
-        new_points=[]
-        for i in range(n_sphere):
-            radius = min(np.abs(rd.gauss(0, self.max_rad_sphere / 5)), self.max_rad_sphere)
-            dens=rd.randint(self.min_dens, self.max_dens)
+    def gen_points(self, pc: PointClouds):
+        n_sphere = rd.randint(self.n_sphere_min, self.n_sphere_max)
+        new_points = []
+
+        for _ in range(n_sphere):
+            radius = min(abs(rd.gauss(0, self.max_rad_sphere / 5)), self.max_rad_sphere)
+            dens = rd.randint(self.min_dens, self.max_dens)
             new_points.extend(self.rd_add_single_sphere(pc, radius, dens))
-        labels=np.full(len(new_points), 1, dtype=int)
-        dict_pc={"points":new_points,
-             "labels": labels}
-        plant_pc=dictpcd(dict_pc)
-        return plant_pc
-    
+
+        new_points = np.asarray(new_points)
+        labels = np.full(len(new_points), 1, dtype=int)
+        colors = np.tile(np.array([[0.0, 0.8, 0.0]]), (len(new_points), 1))  # Couleur verte pour plantes
+
+        return PointClouds([new_points], [colors], [labels], names=["plant"])
+
     def gen_dataset(self):
         if self.drop_pot:
-            pc_corolle=self.drop(self.corolle)
+            pc_corolle = self.drop(self.corolle)
         else:
-            pc_corolle=self.corolle
-        N=pc_corolle.size
-        n_batches=math.ceil(self.n/self.max_single_batch)
-        count=0
+            pc_corolle = self.corolle
+
+        n_batches = math.ceil(self.n / self.max_single_batch)
+        count = 0
         os.makedirs(self.save_repository, exist_ok=True)
 
         for batch_idx in range(n_batches):
-            batch_size=min(self.max_single_batch, self.n-count)
-            batch_pc_corolle=pc_corolle.duplicate(batch_size)
-            batch_pc_corolle=self.pre_gen_augmenter.ajout_bruit_gaussien(batch_pc_corolle)
-            batch_pc_corolle=self.pre_gen_augmenter.apply_translation(batch_pc_corolle)
-            batch_pc_corolle=self.pre_gen_augmenter.apply_scaling(batch_pc_corolle)
+            batch_size = min(self.max_single_batch, self.n - count)
+
+            batch_pc_corolle = pc_corolle.duplicate(batch_size)
+            batch_pc_corolle = self.pre_gen_augmenter.ajout_bruit_gaussien(batch_pc_corolle)
+            batch_pc_corolle = self.pre_gen_augmenter.apply_translation(batch_pc_corolle)
+            batch_pc_corolle = self.pre_gen_augmenter.apply_scaling(batch_pc_corolle)
 
             for i in range(batch_size):
-                pc_corolle_i=batch_pc_corolle[i]
-                pc_plant_i=self.gen_points(pc_corolle_i)
+                name = f"sample_{count:04d}"
+                pc_corolle_i = batch_pc_corolle[i]
+                pc_plant_i = self.gen_points(pc_corolle_i)
+
                 if self.with_outliers:
                     n_outliers = np.random.randint(self.n_outliers_min, self.n_outliers_max)
-                    pc_outliers_i = self.gen_outliers(
-                        pc_corolle_i, n_outliers=n_outliers
-                    )      
+                    pc_outliers_i = self.gen_outliers(pc_corolle_i, n_outliers=n_outliers)
                 else:
-                    pc_outliers_i = None 
+                    pc_outliers_i = None
 
-                pc_i=pc_corolle_i.fusion(pc_plant_i, name=f"sample_{count:04d}")
-                pc_i=pc_i.fusion(pc_outliers_i)       
-                pc_i=self.post_gen_augmenter.apply_random_rotation(pc_i)
-                pc_i=self.post_gen_augmenter.apply_dropout(pc_i)
-                pc_i=self.post_gen_augmenter.apply_scaling(pc_i)
-                pc_i.save_labeled_point_cloud(self.save_repository)
-                count+=1
-        print(f"✅ {self.n} nuages sauvegardés dans : {self.save_repository}")        
+                pc_i = pc_corolle_i.fusion(pc_plant_i, names=[name])
+                if pc_outliers_i is not None:
+                    pc_i = pc_i.fusion(pc_outliers_i, names=[name])
+
+                pc_i = self.post_gen_augmenter.apply_random_rotation(pc_i)
+                pc_i = self.post_gen_augmenter.apply_dropout(pc_i)
+                pc_i = self.post_gen_augmenter.apply_scaling(pc_i)
+
+                pc_i.save_labelled_point_clouds(self.save_repository)
+                count += 1
+
+        print(f"✅ {self.n} nuages sauvegardés dans : {self.save_repository}")
+      
     
 class GenerateurIteratif(Generateurs):
-        def __init__(self, source_corolle: str, n:int, n_plants_min:int, n_plants_max:int, save_repository:str, 
-                      pre_gen_augmenter:BatchPCDataAugmenter, post_gen_augmenter:PCDataAugmenter, 
-                      with_outliers:bool, 
-                      min_density: float, max_density:float, min_radius: float, max_radius:float, min_decay_density:float, max_decay_density:float, min_decay_radius:float, max_decay_radius:float, min_depth: int, max_depth: int,
-                      n_outliers_min:int = 500, n_outliers_max=2500,
-                      normalize_points=True, drop_pot:bool=True, max_single_batch=500):
-            super().__init__(source_corolle, n, save_repository, pre_gen_augmenter, post_gen_augmenter, with_outliers, n_outliers_min, n_outliers_max, normalize_points, drop_pot, max_single_batch)
-            self.n_plants_min=n_plants_min
-            self.n_plants_max=n_plants_max
-            self.min_density=min_density
-            self.max_density=max_density
-            self.min_radius=min_radius
-            self.max_radius=max_radius
-            self.min_decay_density=min_decay_density
-            self.max_decay_density=max_decay_density
-            self.min_decay_radius=min_decay_radius
-            self.max_decay_radius=max_decay_radius
-            self.min_depth=min_depth
-            self.max_depth=max_depth
+    def __init__(self, source_corolle: str, n: int, n_plants_min: int, n_plants_max: int, save_repository: str,
+                 pre_gen_augmenter: DataAugmenter, post_gen_augmenter: DataAugmenter,
+                 with_outliers: bool,
+                 min_density: float, max_density: float,
+                 min_radius: float, max_radius: float,
+                 min_decay_density: float, max_decay_density: float,
+                 min_decay_radius: float, max_decay_radius: float,
+                 min_depth: int, max_depth: int,
+                 n_outliers_min: int = 500, n_outliers_max=2500,
+                 normalize_points=True, drop_pot: bool = True, max_single_batch=500):
+        super().__init__(source_corolle, n, save_repository, pre_gen_augmenter, post_gen_augmenter,
+                         with_outliers, n_outliers_min, n_outliers_max, normalize_points, drop_pot, max_single_batch)
+        self.n_plants_min = n_plants_min
+        self.n_plants_max = n_plants_max
+        self.min_density = min_density
+        self.max_density = max_density
+        self.min_radius = min_radius
+        self.max_radius = max_radius
+        self.min_decay_density = min_decay_density
+        self.max_decay_density = max_decay_density
+        self.min_decay_radius = min_decay_radius
+        self.max_decay_radius = max_decay_radius
+        self.min_depth = min_depth
+        self.max_depth = max_depth
 
+    def iterative_growth(self, pc: PointClouds, x, y, z,
+                         base_density, base_radius, decay_density, decay_radius, depth_max):
+        corolle_points = np.asarray(pc.points[0])
+        points = []
+        current_density = base_density
+        current_radius = base_radius
+        current_center = np.array([x, y, z])
+        step = 0
 
-        def iterative_growth(self, pc, x, y, z, base_density, base_radius, decay_density, decay_radius, depth_max):
-            corolle_points = np.asarray(pc.points)
-            points = []
-            current_density = base_density
-            current_radius = base_radius
-            current_center = np.array([x, y, z])
-            step = 0
-            yfin = float(np.max(corolle_points[:, 1]))
+        yfin = float(np.max(corolle_points[:, 1]))
+        tree = KDTree(corolle_points)
 
-            # Construire le KDTree une seule fois (parce que corolle_points est fixe)
-            tree = KDTree(corolle_points)
+        while step < depth_max:
+            sphere = self.generate_sphere_points(
+                *current_center, current_radius, current_density
+            )
+            if len(sphere) == 0:
+                break
 
-            while step < depth_max:
-                sphere = self.generate_sphere_points(
-                    *current_center, current_radius, current_density
-                )
-                if len(sphere) == 0:
-                    break
+            points.extend(sphere)
+            p_high = np.array(max(sphere, key=lambda pt: pt[1]))
+            _, idx_nearest = tree.query(p_high)
+            new_center = corolle_points[idx_nearest]
 
-                points.extend(sphere)
+            current_density *= decay_density
+            current_radius *= decay_radius
+            current_center = new_center
+            step += 1
 
-                # Trouver le point le plus haut de la sphère
-                p_high = np.array(max(sphere, key=lambda pt: pt[1]))
+        return points
 
-                # Utiliser KDTree pour trouver le point le plus proche de p_high dans corolle_points
-                # La méthode query renvoie une paire (distance, index)
-                dist, idx_nearest = tree.query(p_high)
-                new_center = corolle_points[idx_nearest]
+    def gen_points(self, pc: PointClouds, base_points: np.ndarray):
+        n_plants = np.random.randint(self.n_plants_min, self.n_plants_max)
+        radius = np.random.uniform(self.min_radius, self.max_radius)
+        base_density = np.random.uniform(self.min_density, self.max_density)
+        decay_density = np.random.uniform(self.min_decay_density, self.max_decay_density)
+        decay_radius = np.random.uniform(self.min_decay_radius, self.max_decay_radius)
+        depth = int(np.random.uniform(self.min_depth, self.max_depth))
 
-                # Appliquer les décadences
-                current_density *= decay_density
-                current_radius *= decay_radius
-                current_center = new_center
+        grown_points = []
 
-                step += 1
+        for _ in range(n_plants):
+            x0, y0, z0 = base_points[np.random.randint(len(base_points))]
+            plant_points = self.iterative_growth(
+                pc, x0, y0, z0,
+                base_density,
+                radius,
+                decay_density,
+                decay_radius,
+                depth,
+            )
+            grown_points.extend(plant_points)
 
-            return points
+        grown_points = np.asarray(grown_points)
+        labels = np.full(len(grown_points), 1, dtype=int)
+        colors = np.tile(np.array([[0.0, 0.8, 0.0]]), (len(grown_points), 1))  # Vert
 
-        def gen_points(self, pc, base_points):
-            n_plants=np.random.randint(self.n_plants_min, self.n_plants_max)
-            radius=np.random.uniform(self.min_radius, self.max_radius)
-            base_density=np.random.uniform(self.min_density, self.max_density)
-            decay_density=np.random.uniform(self.min_decay_density, self.max_decay_density)
-            decay_radius=np.random.uniform(self.min_decay_radius, self.max_decay_radius)
-            grown_points = []
-            depth=int(np.random.uniform(self.min_depth, self.max_depth))
+        return PointClouds([grown_points], [colors], [labels], names=["plant"])
 
-            for _ in range(n_plants):
-                x0, y0, z0 = base_points[np.random.randint(len(base_points))]
-                plant_points = self.iterative_growth(
-                    pc,
-                    x0,
-                    y0,
-                    z0,
-                    base_density,
-                    radius,
-                    decay_density,
-                    decay_radius,
-                    depth,
-                )
-                grown_points.extend(plant_points)
-            labels=np.full(len(grown_points), 1, dtype=int)
-            dict_plant={"points": np.array(grown_points),
-                        "labels": labels}
-            
-            pc_plant=dictpcd(dict_plant)
+    def gen_dataset(self):
+        if self.drop_pot:
+            pc_corolle = self.drop(self.corolle)
+        else:
+            pc_corolle = self.corolle
 
-            return pc_plant
+        base_mask = (pc_corolle.points[0][:, 1] > 0.45) & (pc_corolle.points[0][:, 1] < 0.49)
+        base_indices = np.where(base_mask)[0]
 
-        def gen_dataset(self):
-            N=self.corolle.size
-            #np.array([pt for pt in self.corolle if pt[1] > 0.45 and pt[1] < 0.49])
-            if self.drop_pot:
-                pc_corolle=self.drop(self.corolle)
-            else:
-                pc_corolle=self.corolle
-            base_points_indices=[i for i, pt in enumerate(pc_corolle.points) if 0.45 < pt[1] < 0.49]
-            n_batches=math.ceil(self.n/self.max_single_batch)
-            count=0
-            os.makedirs(self.save_repository, exist_ok=True)
+        if len(base_indices) == 0:
+            raise ValueError("Aucun point base trouvé dans la plage y ∈ (0.45, 0.49)")
 
-            for batch_idx in range(n_batches):
-                batch_size=min(self.max_single_batch, self.n-count)
-                batch_pc_corolle=pc_corolle.duplicate(batch_size) 
-                batch_pc_corolle=self.pre_gen_augmenter.ajout_bruit_gaussien(batch_pc_corolle)
-                batch_pc_corolle=self.pre_gen_augmenter.apply_translation(batch_pc_corolle)
-                batch_pc_corolle=self.pre_gen_augmenter.apply_scaling(batch_pc_corolle)
-                for i in range(batch_size):
-                    pc_corolle_i=batch_pc_corolle[i]
-                    base_points_i=pc_corolle_i.points[base_points_indices]
-                    pc_plant_i=self.gen_points(pc_corolle_i, base_points_i)
-                    if self.with_outliers:
-                        n_outliers = np.random.randint(self.n_outliers_min, self.n_outliers_max)
-                        pc_outliers_i = self.gen_outliers(
-                            pc_corolle_i, n_outliers=n_outliers
-                        )      
-                    else:
-                        pc_outliers_i = None 
+        n_batches = math.ceil(self.n / self.max_single_batch)
+        count = 0
+        os.makedirs(self.save_repository, exist_ok=True)
 
-                    pc_i=pc_corolle_i.fusion(pc_plant_i, name=f"sample_{count:04d}")
-                    pc_i=pc_i.fusion(pc_outliers_i)       
-                    pc_i=self.post_gen_augmenter.apply_random_rotation(pc_i)
-                    pc_i=self.post_gen_augmenter.apply_dropout(pc_i)
-                    pc_i=self.post_gen_augmenter.apply_scaling(pc_i)
-                    pc_i.save_labeled_point_cloud(self.save_repository)
-                    count+=1
-            print(f"✅ {self.n} nuages sauvegardés dans : {self.save_repository}") 
+        for _ in range(n_batches):
+            batch_size = min(self.max_single_batch, self.n - count)
+            batch_pc_corolle = pc_corolle.duplicate(batch_size)
+            batch_pc_corolle = self.pre_gen_augmenter.ajout_bruit_gaussien(batch_pc_corolle)
+            batch_pc_corolle = self.pre_gen_augmenter.apply_translation(batch_pc_corolle)
+            batch_pc_corolle = self.pre_gen_augmenter.apply_scaling(batch_pc_corolle)
+
+            for i in range(batch_size):
+                name = f"sample_{count:04d}"
+                pc_corolle_i = batch_pc_corolle[i]
+                base_points_i = pc_corolle_i.points[0][base_indices]
+                pc_plant_i = self.gen_points(pc_corolle_i, base_points_i)
+
+                if self.with_outliers:
+                    n_outliers = np.random.randint(self.n_outliers_min, self.n_outliers_max)
+                    pc_outliers_i = self.gen_outliers(pc_corolle_i, n_outliers=n_outliers)
+                else:
+                    pc_outliers_i = None
+
+                pc_i = pc_corolle_i.fusion(pc_plant_i, names=[name])
+                if pc_outliers_i is not None:
+                    pc_i = pc_i.fusion(pc_outliers_i, names=[name])
+
+                pc_i = self.post_gen_augmenter.apply_random_rotation(pc_i)
+                pc_i = self.post_gen_augmenter.apply_dropout(pc_i)
+                pc_i = self.post_gen_augmenter.apply_scaling(pc_i)
+
+                pc_i.save_labelled_point_clouds(self.save_repository)
+                count += 1
+
+        print(f"✅ {self.n} nuages sauvegardés dans : {self.save_repository}")
+
             
 # idee: mutualiser gen_dataset naif et iteratif dans Generateurs pour eviter la repetition du code. 
 # En effet la seule différence est que pour le generateur Iteratif, la fonction gen_points a besoin de points de base
